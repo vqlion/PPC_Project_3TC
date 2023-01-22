@@ -26,8 +26,6 @@ class Market(Process):
                         client_socket, address = server_socket.accept()
                         executor.submit(th.transaction_handler, client_socket, address)
 
-        
-
 
 if __name__ == "__main__":
     price.setPrice(1000)
