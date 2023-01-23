@@ -1,8 +1,12 @@
 from multiprocessing import Process
+from multiprocessing.managers import SyncManager
 import socket
 
 HOST = "localhost"
 PORT = 1515
+KEY = b'Dinosour'
+
+class DictManager(SyncManager): pass
 
 class Home(Process):
     def __init__(self, initial_balance, initial_energy):
@@ -22,7 +26,7 @@ class Home(Process):
                 message_received = data.decode().split()
 
                 if message_received[0] == 'price':
-                    current_price = int(message_received[1])
+                    current_price = float(message_received[1])
                     if operation == 'buy' and current_price * value > self.balance:
                         client_socket.sendall('end'.encode())
                         return 1
@@ -31,16 +35,24 @@ class Home(Process):
                 
                 elif message_received[0] == f'ok_{operation}':
                     if operation == 'buy':
-                        self.balance -= int(message_received[1])
+                        self.balance -= float(message_received[1])
                     elif operation == 'sell':
-                        self.balance += int(message_received[1])
+                        self.balance += float(message_received[1])
                     client_socket.sendall('end'.encode())
                     return 0
 
             return 1
 
+    def get_weather(self):
+        DictManager.register('weather_updates')
+        m = DictManager(address=('', 54545), authkey=KEY)
+        m.connect()
+        weather_updates = m.weather_updates()
+        
+        return weather_updates
 
     def run(self):
-        self.transaction_handler('sell', 10)
+        # self.transaction_handler('sell', 0.25)
+        w_update = self.get_weather()
         print(self.balance)
         pass
