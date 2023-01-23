@@ -3,7 +3,8 @@ from multiprocessing.managers import SyncManager
 import random
 import time
 
-KEY = b'Dinosour'
+SHARED_MEMORY_KEY = b'Dinosour'
+SHARED_MEMORY_PORT = 54545
 class DictManager(SyncManager): pass
 
 weather_updates = {}
@@ -12,7 +13,7 @@ def get_dict():
 
 def weather_server():
     DictManager.register('weather_updates', get_dict)
-    m = DictManager(address=('', 54545), authkey=KEY)
+    m = DictManager(address=('', SHARED_MEMORY_PORT), authkey=SHARED_MEMORY_KEY)
     s = m.get_server()
     s.serve_forever()
 
@@ -22,7 +23,7 @@ if __name__ == "__main__":
     weather_updates.update(([('temp', 15)]))
 
     while True:
-        timeout = random.randint(1,60)
+        timeout = random.randint(1,15)
         temp = weather_updates.get('temp')
         new_temp = temp + random.randint(-1, 1) 
         time.sleep(timeout)

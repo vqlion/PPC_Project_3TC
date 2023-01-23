@@ -1,10 +1,20 @@
 from multiprocessing import Process
 from multiprocessing.managers import SyncManager
 import socket
+import time
+import threading
+import numpy as np
+import os
 
 HOST = "localhost"
 PORT = 1515
-KEY = b'Dinosour'
+SHARED_MEMORY_KEY = b'Dinosour'
+SHARED_MEMORY_PORT = 54545
+
+STD_ENERGY = 7
+ENERGY_PROD = 7
+ENERGY_CONS = 7
+STD_TEMP = 15
 
 class DictManager(SyncManager): pass
 
@@ -45,14 +55,36 @@ class Home(Process):
 
     def get_weather(self):
         DictManager.register('weather_updates')
-        m = DictManager(address=('', 54545), authkey=KEY)
+        m = DictManager(address=('', SHARED_MEMORY_PORT), authkey=SHARED_MEMORY_KEY)
         m.connect()
         weather_updates = m.weather_updates()
         
         return weather_updates
+    
+    def produce_energy(self, energy_mutex):
+        while True:
+            time.sleep(1)
+            energy_produced = np.random.normal(loc=ENERGY_PROD, scale=0.5, size=1)[0]
+            with energy_mutex:
+                self.energy += energy_produced
+
+    def consume_energy(self, energy_mutex):
+        while True:
+            time.sleep(1)
+            energy_consumed = np.random.normal(loc=ENERGY_CONS, scale=0.5, size=1)[0]
+            with energy_mutex:
+                self.energy -= energy_consumed
+            print(os.getpid(), "cons", ENERGY_CONS, "energy", self.energy)
 
     def run(self):
+        global ENERGY_CONS, ENERGY_PROD
         # self.transaction_handler('sell', 0.25)
         w_update = self.get_weather()
-        print(self.balance)
-        pass
+        energy_mutex = threading.Lock()
+
+        producer_thread = threading.Thread(target=self.produce_energy, args=(energy_mutex, )).start()
+        consumer_thread = threading.Thread(target=self.consume_energy, args=(energy_mutex, )).start()
+        while True:
+            temperature =  w_update.get("temp")
+            temperature_deviance = STD_TEMP - temperature
+            ENERGY_CONS = STD_ENERGY + 0.5 * temperature_deviance
