@@ -1,4 +1,5 @@
 from multiprocessing import Process
+import threading
 import transaction_handler as th
 import socket
 import select
@@ -25,9 +26,7 @@ class Market(Process):
     def __init__(self):
         super().__init__()
 
-    def run(self):
-        ex_event_process = ExternalEvent()
-        ex_event_process.start()
+    def create_connections(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((HOST, PORT))
             server_socket.listen()
@@ -39,6 +38,13 @@ class Market(Process):
                     if server_socket in readable:
                         client_socket, address = server_socket.accept()
                         executor.submit(th.transaction_handler, client_socket, address)
+    
+    def run(self):
+        ex_event_process = ExternalEvent()
+        ex_event_process.start()
+
+        create_connections_thread = threading.Thread(target=self.create_connections)
+        create_connections_thread.start()
 
 
 if __name__ == "__main__":
