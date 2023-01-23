@@ -4,16 +4,30 @@ import socket
 import select
 import concurrent.futures
 import price
+from external import ExternalEvent
+import signal
 
 HOST = "localhost"
 PORT = 1515
 MAX_THREADS = 10
+
+external = False
+
+def signal_handler(sig, frame):
+    global external
+    if sig == signal.SIGUSR1:
+        external = not external
+        print(external)
+
+signal.signal(signal.SIGUSR1, signal_handler)
 
 class Market(Process):
     def __init__(self):
         super().__init__()
 
     def run(self):
+        ex_event_process = ExternalEvent()
+        ex_event_process.start()
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((HOST, PORT))
             server_socket.listen()
