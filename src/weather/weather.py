@@ -2,9 +2,12 @@ import threading
 from multiprocessing.managers import SyncManager
 import random
 import time
+import sys
 
-SHARED_MEMORY_KEY = b'Dinosour'
-SHARED_MEMORY_PORT = 54545
+sys.path.append('../')
+from constants import *
+
+
 class DictManager(SyncManager): pass
 
 weather_updates = {}

@@ -1,4 +1,5 @@
 from multiprocessing import Process
+from multiprocessing.managers import SyncManager
 import threading
 import transaction_handler as th
 import socket
@@ -7,9 +8,12 @@ import concurrent.futures
 import price
 from external import ExternalEvent
 import signal
+import sys
+import time
+sys.path.append('../')
 
-HOST = "localhost"
-PORT = 1515
+from constants import *
+
 MAX_THREADS = 10
 
 external = False
@@ -21,6 +25,8 @@ def signal_handler(sig, frame):
         print(external)
 
 signal.signal(signal.SIGUSR1, signal_handler)
+
+class DictManager(SyncManager): pass
 
 class Market(Process):
     def __init__(self):
@@ -38,6 +44,17 @@ class Market(Process):
                     if server_socket in readable:
                         client_socket, address = server_socket.accept()
                         executor.submit(th.transaction_handler, client_socket, address)
+
+    def get_weather(self):
+        DictManager.register('weather_updates')
+        m = DictManager(address=('', SHARED_MEMORY_PORT), authkey=SHARED_MEMORY_KEY)
+        m.connect()
+        weather_updates = m.weather_updates()
+        
+        return weather_updates
+
+    def calculate_price(self):
+        pass
     
     def run(self):
         ex_event_process = ExternalEvent()
@@ -46,9 +63,19 @@ class Market(Process):
         create_connections_thread = threading.Thread(target=self.create_connections)
         create_connections_thread.start()
 
+        weather_updates = self.get_weather()
+        previous_price = STD_PRICE
+        while True:
+            time.sleep(1)
+            temperature = weather_updates.get("temp")
+            temperature_deviance = STD_TEMP - temperature
+            new_price = 0.999 * previous_price + 0.01 * temperature_deviance + 0.1 * external
+            price.setPrice(new_price)
+            previous_price = new_price
+            print(price.price)
 
 if __name__ == "__main__":
-    price.setPrice(1000)
+    price.setPrice(STD_PRICE)
     market_process = Market()
 
     market_process.start()
