@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from multiprocessing.managers import SyncManager
 import socket
 import time
@@ -13,13 +13,15 @@ from constants import *
 class DictManager(SyncManager): pass
 
 class Home(Process):
-    def __init__(self, initial_balance, initial_energy, queue):
+    def __init__(self, initial_balance, initial_energy, give_queue, ask_queue, strategy):
         super().__init__()
         self.balance = initial_balance
         self.energy = initial_energy
-        self.message_queue = queue
+        self.give_queue = give_queue
+        self.ask_queue = ask_queue
         self.energy_prod = STD_ENERGY
         self.energy_cons = STD_ENERGY
+        self.strategy = strategy
 
     def transaction_handler(self, operation, value, balance_mutex):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
@@ -62,30 +64,31 @@ class Home(Process):
     
     def produce_energy(self, energy_mutex):
         while True:
-            time.sleep(1)
+            # time.sleep(1)
             energy_produced = np.random.normal(loc=self.energy_prod, scale=0.5, size=1)[0]
             with energy_mutex:
                 self.energy += energy_produced
+            if self.strategy == 1:
+                self.give_queue.put()
 
     def consume_energy(self, energy_mutex):
         while True:
-            time.sleep(1)
+            # time.sleep(1)
             energy_consumed = np.random.normal(loc=self.energy_cons, scale=0.5, size=1)[0]
             with energy_mutex:
                 self.energy -= energy_consumed
-            print(os.getpid(), "cons", self.energy_cons, "energy", self.energy)
 
     def run(self):
-        global energy_cons, energy_prod
         weather_updates = self.get_weather()
         energy_mutex = threading.Lock()
         balance_mutex = threading.Lock()
 
         self.transaction_handler('sell', 0.25, balance_mutex)
 
-        producer_thread = threading.Thread(target=self.produce_energy, args=(energy_mutex, )).start()
         consumer_thread = threading.Thread(target=self.consume_energy, args=(energy_mutex, )).start()
+        producer_thread = threading.Thread(target=self.produce_energy, args=(energy_mutex, )).start()
         while True:
+            print(os.getpid(), "cons", self.energy_cons, "prod", self.energy_prod, "energy", self.energy)
             temperature =  weather_updates.get("temp")
             temperature_deviance = STD_TEMP - temperature
             self.energy_cons = STD_ENERGY + 0.5 * temperature_deviance
