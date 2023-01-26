@@ -3,7 +3,7 @@ import home
 from multiprocessing import Queue
 
 INIT_BALANCE = 100
-INIT_ENERGY = 0
+INIT_ENERGY = 10
 
 if __name__ == "__main__":
     number_of_homes = 0
@@ -16,10 +16,10 @@ if __name__ == "__main__":
     number_of_homes = int(sys.argv[1])
     process_list = []
 
-    for i in range(number_of_homes):
+    for _ in range(number_of_homes):
         give_queue = Queue()
         ask_queue = Queue()
-        home_process = home.Home(INIT_BALANCE, INIT_ENERGY, give_queue, ask_queue, i)
+        home_process = home.Home(INIT_BALANCE, INIT_ENERGY, give_queue, ask_queue, 1)
         home_process.start()
         process_list.append(home_process)
 

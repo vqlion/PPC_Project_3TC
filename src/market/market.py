@@ -68,8 +68,7 @@ class Market(Process):
         while True:
             time.sleep(1)
             temperature = weather_updates.get("temp")
-            temperature_deviance = STD_TEMP - temperature
-            new_price = 0.999 * previous_price + 0.01 * temperature_deviance + 0.1 * external
+            new_price = 0.99 * previous_price + 0.001 * (1 / temperature) + 0.01 * external
             price.setPrice(new_price)
             previous_price = new_price
             print(price.price)

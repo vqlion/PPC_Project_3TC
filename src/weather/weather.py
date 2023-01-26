@@ -23,7 +23,7 @@ def weather_server():
 if __name__ == "__main__":
     server = threading.Thread(target=weather_server)
     server.start()
-    weather_updates.update(([('temp', 15)]))
+    weather_updates.update(([('temp', STD_TEMP)]))
 
     while True:
         timeout = random.randint(1,15)
