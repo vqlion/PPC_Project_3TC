@@ -79,7 +79,7 @@ class Market(Process):
             time.sleep(1)
             temperature = weather_updates.get("temp")
             current_cons = STD_ENERGY + (1 / temperature)
-            new_price = 0.99 * previous_price + 0.001 * (1 / temperature) + 0.01 * external + big_event + 0.01 * current_cons
+            new_price = (0.99 * previous_price) + (0.001 * (1 / temperature)) + (0.01 * external) + big_event + (0.0001 * current_cons)
             price.setPrice(new_price)
             previous_price = new_price
 
