@@ -12,4 +12,8 @@ class ExternalEvent(Process):
         while True:
             timeout = random.randint(1,60)
             time.sleep(timeout)
-            os.kill(os.getppid(), signal.SIGUSR1)
+            decider = random.random()
+            if decider > 0.1:
+                os.kill(os.getppid(), signal.SIGUSR1)
+            else:
+                os.kill(os.getppid(), signal.SIGUSR2)

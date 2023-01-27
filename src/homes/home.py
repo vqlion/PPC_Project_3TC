@@ -1,26 +1,37 @@
 import sys
 sys.path.append('../')
 from constants import *
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from multiprocessing.managers import SyncManager
 import socket
 import time
 import threading
 import numpy as np
 import os
+import sysv_ipc
 
 
 class DictManager(SyncManager):
     pass
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+ 
 
 class Home(Process):
-    def __init__(self, initial_balance, initial_energy, give_queue, ask_queue, strategy):
+    def __init__(self, initial_balance, initial_energy, strategy, id):
         super().__init__()
         self.balance = initial_balance
         self.energy = initial_energy
-        self.give_queue = give_queue
-        self.ask_queue = ask_queue
+        self.queue = sysv_ipc.MessageQueue(MESSAGE_QUEUE_KEY)
         self.energy_prod = STD_ENERGY
         self.energy_cons = STD_ENERGY
         self.strategy = strategy
@@ -28,6 +39,7 @@ class Home(Process):
         self.balance_mutex = threading.Lock()
         self.needy = True
         self.idle = False
+        self.id = id + 1
 
     def transaction_handler(self, operation, value):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
@@ -79,13 +91,14 @@ class Home(Process):
                         self.energy += energy_produced
                 else:
                     if self.strategy == 1:
-                        self.give_queue.put(energy_produced)
+                        self.queue.send(str(energy_produced).encode(), type=1)
+                        print(bcolors.OKBLUE + f"Home {self.id} gave {energy_produced} to the queue")
                     elif self.strategy == 2:
                         self.transaction_handler('sell', energy_produced)
                     else:
                         try:
-                            self.ask_queue.get(block=True, timeout=0.1)
-                            self.give_queue.put(energy_produced)
+                            self.queue.receive(block=False, type=2)
+                            self.queue.send(str(energy_produced).encode(), type=1)
                         except:
                             self.transaction_handler('sell', energy_produced)
 
@@ -106,40 +119,32 @@ class Home(Process):
     def handle_energy(self):
         while True:
             if self.idle:
-                print(os.getpid(), "went idle!")
-                if self.transaction_handler('buy', 10):
-                    energy_taken = 0
+                print(bcolors.FAIL + f"Home {self.id} is out of energy. It goes idle with a balance of {self.balance}")
+                if self.transaction_handler('buy', 3):
+                    energy_taken = ""
                     try:
-                        energy_taken = self.give_queue.get(block=True, timeout=0.1)
+                        energy_taken, t = self.queue.receive(block=False, type=1)
                     except:
-                        self.ask_queue.put(1)
-                        energy_taken = self.give_queue.get()
-
+                        self.queue.send(1, type=2)
+                        energy_taken, t = self.queue.receive(type=1)
+                    energy_taken = float(energy_taken.decode())
                     with self.energy_mutex:
                         self.energy += energy_taken
-                    print(os.getpid(), "got out of idle : take")
+                    print(bcolors.OKCYAN + f"Home {self.id} got out of idle: took {energy_taken} from the queue. Current amount of energy: {self.energy}")
                 else:
-                    print(os.getpid(), "got out of idle : buy")
                     with self.energy_mutex:
-                        self.energy += 10
+                        self.energy += 3
+                    print(bcolors.OKGREEN + f"Home {self.id} got out of idle: bought 3 from the market. . Current amount of energy: {self.energy}. New balance is {self.balance}")
                 self.idle = False
 
-    def printer(self):
-        while True:
-            time.sleep(1)
-            print(os.getpid(), "cons", self.energy_cons, "prod",
-                self.energy_prod, "energy", self.energy, "balance", self.balance)
-
     def run(self):
-        print(os.getpid(), "cons", self.energy_cons, "prod",
-              self.energy_prod, "energy", self.energy, "balance", self.balance)
+        print(os.getpid(), self.id)
         weather_updates = self.get_weather()
 
-        printer = threading.Thread(target=self.printer).start()
         consumer_thread = threading.Thread(target=self.consume_energy).start()
         producer_thread = threading.Thread(target=self.produce_energy).start()
         handler_thread = threading.Thread(target=self.handle_energy).start()
         while True:
             temperature = weather_updates.get("temp")
-            self.energy_cons = STD_ENERGY + 0.5 * (1 / temperature)
+            self.energy_cons = STD_ENERGY + (1 / temperature)
             self.needy = True if self.energy < 10 else False
