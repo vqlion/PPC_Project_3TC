@@ -129,6 +129,7 @@ class Home(Process):
         global stop_event
         while not stop_event.is_set():
             if self.idle:
+                self.send_update()
                 print(bcolors.FAIL + f"Home {self.id} is out of energy. It goes idle with a balance of {self.balance}")
                 if self.transaction_handler('buy', 3):
                     energy_taken = ""
@@ -151,10 +152,14 @@ class Home(Process):
         global stop_event
         while not stop_event.is_set():
             time.sleep(1)
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                client_socket.connect((HOST, MAIN_PORT))
-                message = f"home {self.id} {self.balance} {self.energy}"
-                client_socket.sendall(message.encode())
+            self.send_update()
+
+    def send_update(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((HOST, MAIN_PORT))
+            message = f"home {self.id} {self.balance} {self.energy if not self.idle else 0}"
+            client_socket.sendall(message.encode())
+
 
     def run(self):
         global stop_event

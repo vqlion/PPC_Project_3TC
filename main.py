@@ -13,6 +13,7 @@ import sysv_ipc
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib.patches as mpatches
+import numpy as np
 
 from src import home_creator
 from src import market
@@ -48,9 +49,8 @@ def create_connections():
                                     client_socket, address)
 
 
-
 def transaction_handler(socket, address):
-    global homes_data, market_data, weather_data, startup_time, event
+    global homes_data, market_data, weather_data, startup_time, event, idles
     with socket as client_socket:
         data = client_socket.recv(1024)
         message = data.decode().split()
@@ -74,24 +74,57 @@ def transaction_handler(socket, address):
                 homes_data[id]["log"].append({"time": time_since_beginning, "balance": info1, "energy": info2})
 
 fig, ax = plt.subplots(2, 2)
+plt.suptitle("Visual representation of the simulation. Close the window to end.", fontsize="medium")
+width = 0.35
+
 
 def plotter(i):
     global event
     for row in ax:
         for col in row:
             col.clear()
+
     ax[0, 0].plot([d["time"] for d in market_data], [d["price"] for d in market_data], 'b')
-    ax[1, 0].plot([d["time"] for d in market_data], [d["temp"] for d in weather_data], 'r')
+    ax[1, 1].plot([d["time"] for d in weather_data], [d["temp"] for d in weather_data], 'r')
+    ax[1, 0].plot([d["time"] for d in market_data], [d["event"] for d in market_data], 'g')
+
+    x = np.arange(len(homes_data))
+    balances = []
+    energies = []
+    labels = []
+    i = 0
+
+    for home in homes_data:
+        balance_list = [d["balance"] for d in home["log"]]
+        energy_list = [d["energy"] for d in home["log"]]
+
+        current_balance = balance_list[-1]
+        current_energy = energy_list[-1]
+
+        balances.append(current_balance)
+        energies.append(current_energy)
+        labels.append(f'Home {i+1} {"(idle)" if idles[i] else ""}')
+        i += 1
+
+    balance_bar = ax[0, 1].bar(x - width / 2, balances, width, label='Balance (euros)', color='b')
+    energy_bar = ax[0, 1].bar(x + width / 2, energies, width, label='Energy (kWh)', color='r')
+    ax[0, 1].bar_label(balance_bar, padding=3)
+    ax[0, 1].bar_label(energy_bar, padding=3)
 
     patches = [[None for _ in range(2)] for _ in range(2)]
 
     patches[0][0] = mpatches.Patch(color='blue', label='Price', linestyle='-')
-    patches[1][0] = mpatches.Patch(color='red', label='Temperature', linestyle='-', linewidth=1)
+    patches[1][0] = mpatches.Patch(color='green', label='Event', linestyle='-', linewidth=1)
+    patches[1][1] = mpatches.Patch(color='red', label='Temperature', linestyle='-', linewidth=1)
 
     ax[0, 0].set(xlabel='Time elapsed (s)', ylabel='Price (euros/kWh)')
     ax[0, 0].legend(handles=[patches[0][0]])
-    ax[1, 0].set(xlabel='Time elapsed (s)', ylabel='Temperature (°C)')
+    ax[0, 1].legend()
+    ax[0, 1].set_xticks(x, labels)
+    ax[1, 0].set(xlabel='Time elapsed (s)', ylabel='Event occuring')
     ax[1, 0].legend(handles=[patches[1][0]])
+    ax[1, 1].set(xlabel='Time elapsed (s)', ylabel='Temperature (°C)')
+    ax[1, 1].legend(handles=[patches[1][1]])
 
 
 if __name__ == "__main__":
@@ -131,7 +164,9 @@ if __name__ == "__main__":
     print("starting homes")
     homes_process.start()
 
-    ani = animation.FuncAnimation(fig, plotter, interval=1000)
+    time.sleep(2)
+
+    ani = animation.FuncAnimation(fig, plotter, interval=250)
     plt.show()
 
     input("Type anything to stop.")
