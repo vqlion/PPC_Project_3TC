@@ -1,10 +1,10 @@
 from multiprocessing import Process
 from multiprocessing.managers import SyncManager
+from concurrent.futures import ThreadPoolExecutor
 import threading
 from src import transaction_handler as th
 import socket
 import select
-import concurrent.futures
 from src import price
 import signal
 import time
@@ -59,7 +59,7 @@ def create_connections():
         server_socket.listen()
         server_socket.setblocking(False)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
             while not stop_event.is_set():
                 readable, writable, error = select.select([server_socket], [], [], 1)
                 if server_socket in readable:
@@ -89,7 +89,7 @@ def update_logs():
         time.sleep(1)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((HOST, MAIN_PORT))
-            message = f"market 0 {price.price} {1 if external or big_event else 0}"
+            message = f"market 0 {price.price} {0 if external or big_event else 1}"
             client_socket.sendall(message.encode())
 
 def market():

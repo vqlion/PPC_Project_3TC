@@ -10,6 +10,10 @@ import signal
 import threading
 import sysv_ipc
 
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import matplotlib.patches as mpatches
+
 from src import home_creator
 from src import market
 from src import weather
@@ -25,6 +29,7 @@ homes_mutex = threading.Lock()
 stop_event = threading.Event()
 
 startup_time = 0
+event = False
 
 def create_connections():
     global stop_event
@@ -45,7 +50,7 @@ def create_connections():
 
 
 def transaction_handler(socket, address):
-    global homes_data, market_data, weather_data, startup_time
+    global homes_data, market_data, weather_data, startup_time, event
     with socket as client_socket:
         data = client_socket.recv(1024)
         message = data.decode().split()
@@ -61,12 +66,32 @@ def transaction_handler(socket, address):
 
         if source == "market":
             market_data.append({"time": time_since_beginning, "price": info1, "event": info2})
+            event = int(info2)
         elif source == "weather":
             weather_data.append({"time": time_since_beginning, "temp": info1})
         elif source == "home":
             with homes_mutex:
                 homes_data[id]["log"].append({"time": time_since_beginning, "balance": info1, "energy": info2})
-            
+
+fig, ax = plt.subplots(2, 2)
+
+def plotter(i):
+    global event
+    for row in ax:
+        for col in row:
+            col.clear()
+    ax[0, 0].plot([d["time"] for d in market_data], [d["price"] for d in market_data], 'b')
+    ax[1, 0].plot([d["time"] for d in market_data], [d["temp"] for d in weather_data], 'r')
+
+    patches = [[None for _ in range(2)] for _ in range(2)]
+
+    patches[0][0] = mpatches.Patch(color='blue', label='Price', linestyle='-')
+    patches[1][0] = mpatches.Patch(color='red', label='Temperature', linestyle='-', linewidth=1)
+
+    ax[0, 0].set(xlabel='Time elapsed (s)', ylabel='Price (euros/kWh)')
+    ax[0, 0].legend(handles=[patches[0][0]])
+    ax[1, 0].set(xlabel='Time elapsed (s)', ylabel='Temperature (°C)')
+    ax[1, 0].legend(handles=[patches[1][0]])
 
 
 if __name__ == "__main__":
@@ -106,14 +131,15 @@ if __name__ == "__main__":
     print("starting homes")
     homes_process.start()
 
+    ani = animation.FuncAnimation(fig, plotter, interval=1000)
+    plt.show()
+
     input("Type anything to stop.")
     os.kill(weather_process.pid, signal.SIGALRM)
     os.kill(market_process.pid, signal.SIGALRM)
     os.kill(homes_process.pid, signal.SIGALRM)
 
     stop_event.set()
-    mq = sysv_ipc.MessageQueue(constants.MESSAGE_QUEUE_KEY)
-    mq.remove()
 
     print('i reached the end of main')
 
