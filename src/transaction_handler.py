@@ -1,4 +1,4 @@
-import price
+from src import price
 
 def transaction_handler(socket, address):
     with socket as client_socket:

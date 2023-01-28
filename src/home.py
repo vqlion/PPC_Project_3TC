@@ -1,6 +1,4 @@
-import sys
-sys.path.append('../')
-from constants import *
+from src.constants import *
 from multiprocessing import Process
 from multiprocessing.managers import SyncManager
 import socket
@@ -8,7 +6,16 @@ import time
 import threading
 import numpy as np
 import os
+import signal
 import sysv_ipc
+
+stop_event = threading.Event()
+
+def handler_alrm(sig, frame):
+    global stop_event
+    if sig == signal.SIGALRM:
+        print("home received signal to terminate")
+        stop_event.set()
 
 
 class DictManager(SyncManager):
@@ -39,11 +46,11 @@ class Home(Process):
         self.balance_mutex = threading.Lock()
         self.needy = True
         self.idle = False
-        self.id = id + 1
+        self.id = id
 
     def transaction_handler(self, operation, value):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.connect((HOST, PORT))
+            client_socket.connect((HOST, MARKET_PORT))
             message_received = ['']
             client_socket.sendall('price?'.encode())
             current_price = 0
@@ -80,7 +87,8 @@ class Home(Process):
         return weather_updates
 
     def produce_energy(self):
-        while True:
+        global stop_event
+        while not stop_event.is_set():
             if not self.idle:
                 time.sleep(1)
                 energy_produced = np.random.normal(
@@ -103,7 +111,8 @@ class Home(Process):
                             self.transaction_handler('sell', energy_produced)
 
     def consume_energy(self):
-        while True:
+        global stop_event
+        while not stop_event.is_set():
             if not self.idle:
                 time.sleep(1)
                 energy_consumed = np.random.normal(
@@ -117,7 +126,8 @@ class Home(Process):
                         self.idle = True
 
     def handle_energy(self):
-        while True:
+        global stop_event
+        while not stop_event.is_set():
             if self.idle:
                 print(bcolors.FAIL + f"Home {self.id} is out of energy. It goes idle with a balance of {self.balance}")
                 if self.transaction_handler('buy', 3):
@@ -138,13 +148,22 @@ class Home(Process):
                 self.idle = False
 
     def run(self):
+        global stop_event
         print(os.getpid(), self.id)
         weather_updates = self.get_weather()
+        signal.signal(signal.SIGALRM, handler_alrm)
 
-        consumer_thread = threading.Thread(target=self.consume_energy).start()
-        producer_thread = threading.Thread(target=self.produce_energy).start()
-        handler_thread = threading.Thread(target=self.handle_energy).start()
-        while True:
+        consumer_thread = threading.Thread(target=self.consume_energy)
+        consumer_thread.start()
+        producer_thread = threading.Thread(target=self.produce_energy)
+        producer_thread.start()
+        handler_thread = threading.Thread(target=self.handle_energy)
+        handler_thread.start()
+        while not stop_event.is_set():
             temperature = weather_updates.get("temp")
             self.energy_cons = STD_ENERGY + (1 / temperature)
             self.needy = True if self.energy < 10 else False
+        
+        consumer_thread.join()
+        producer_thread.join()
+        handler_thread.join()
