@@ -83,6 +83,15 @@ def printer():
         print("The price is", price.price, "- External event is impacting the price") if external else print("The price is", price.price)
         print("price event", stop_event.is_set())
 
+def update_logs():
+    global stop_event
+    while not stop_event.is_set():
+        time.sleep(1)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((HOST, MAIN_PORT))
+            message = f"market 0 {price.price} {1 if external or big_event else 0}"
+            client_socket.sendall(message.encode())
+
 def market():
     print("market is", os.getpid())
     price.setPrice(STD_PRICE)
@@ -95,6 +104,9 @@ def market():
     create_connections_thread.start()
     printer_thread = threading.Thread(target=printer)
     printer_thread.start()
+
+    update_thread = threading.Thread(target=update_logs)
+    update_thread.start()
 
     weather_updates = get_weather()
     previous_price = STD_PRICE
@@ -109,4 +121,5 @@ def market():
 
     create_connections_thread.join()
     printer_thread.join()
+    update_thread.join()
     ex_event_process.kill()

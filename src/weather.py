@@ -5,6 +5,7 @@ import time
 from src.constants import *
 import signal
 import os
+import socket
 
 server = None
 
@@ -34,6 +35,15 @@ def stop_weather_server():
     global server
     server.stop_event.set()
 
+def update_logs():
+    global stop_event
+    while not stop_event.is_set():
+        time.sleep(1)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((HOST, MAIN_PORT))
+            message = f"weather 0 {weather_updates.get('temp')} 0"
+            client_socket.sendall(message.encode())
+
 def create_weather():
     global stop_event
     print("weather is", os.getpid())
@@ -41,6 +51,9 @@ def create_weather():
     server_thread.start()
     weather_updates.update(([('temp', STD_TEMP)]))
     signal.signal(signal.SIGALRM, handler_alrm)
+
+    update_thread = threading.Thread(target=update_logs)
+    update_thread.start()
 
     while not stop_event.is_set():
         timeout = random.randint(1,15)
@@ -52,3 +65,4 @@ def create_weather():
 
     stop_weather_server()
     server_thread.join()
+    update_thread.join()

@@ -147,6 +147,15 @@ class Home(Process):
                     print(bcolors.OKGREEN + f"Home {self.id} got out of idle: bought 3 from the market. . Current amount of energy: {self.energy}. New balance is {self.balance}")
                 self.idle = False
 
+    def update_logs(self):
+        global stop_event
+        while not stop_event.is_set():
+            time.sleep(1)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+                client_socket.connect((HOST, MAIN_PORT))
+                message = f"home {self.id} {self.balance} {self.energy}"
+                client_socket.sendall(message.encode())
+
     def run(self):
         global stop_event
         print(os.getpid(), self.id)
@@ -159,6 +168,8 @@ class Home(Process):
         producer_thread.start()
         handler_thread = threading.Thread(target=self.handle_energy)
         handler_thread.start()
+        update_thread = threading.Thread(target=self.update_logs)
+        update_thread.start()
         while not stop_event.is_set():
             temperature = weather_updates.get("temp")
             self.energy_cons = STD_ENERGY + (1 / temperature)
@@ -167,3 +178,4 @@ class Home(Process):
         consumer_thread.join()
         producer_thread.join()
         handler_thread.join()
+        update_thread.join()

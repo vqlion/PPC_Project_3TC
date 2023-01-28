@@ -7,6 +7,8 @@ from multiprocessing import Process
 import json
 import os
 import signal
+import threading
+import sysv_ipc
 
 from src import home_creator
 from src import market
@@ -16,30 +18,55 @@ from src import constants
 MAX_THREADS = 5
 
 homes_data = []
-market_data = {}
-weather_data = {}
+market_data = []
+weather_data = []
 
+homes_mutex = threading.Lock()
+stop_event = threading.Event()
+
+startup_time = 0
 
 def create_connections():
+    global stop_event
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((constants.HOST, constants.MAIN_PORT))
         server_socket.listen()
         server_socket.setblocking(False)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
-            while True:
+            while not stop_event.is_set():
                 readable, writable, error = select.select(
                     [server_socket], [], [], 1)
-                if server_socket in readable:
+                if server_socket in readable and not stop_event.is_set():
                     client_socket, address = server_socket.accept()
                     executor.submit(transaction_handler,
                                     client_socket, address)
 
 
+
 def transaction_handler(socket, address):
+    global homes_data, market_data, weather_data, startup_time
     with socket as client_socket:
         data = client_socket.recv(1024)
-        message = data.decoded().split()
+        message = data.decode().split()
+
+        print(address, message)
+
+        source = message[0]
+        id = int(message[1])
+        info1 = float(message[2])
+        info2 = float(message[3])
+        current_time = time.time()
+        time_since_beginning = current_time - startup_time
+
+        if source == "market":
+            market_data.append({"time": time_since_beginning, "price": info1, "event": info2})
+        elif source == "weather":
+            weather_data.append({"time": time_since_beginning, "temp": info1})
+        elif source == "home":
+            with homes_mutex:
+                homes_data[id]["log"].append({"time": time_since_beginning, "balance": info1, "energy": info2})
+            
 
 
 if __name__ == "__main__":
@@ -60,31 +87,52 @@ if __name__ == "__main__":
         sys.exit(0)
 
     for i in range(number_of_homes):
-        homes_data.append({"id": i})
+        homes_data.append({"id": i, "log": []})
 
     weather_process = Process(target=weather.create_weather)
     market_process = Process(target=market.market)
     homes_process = Process(target=home_creator.create_homes, args=(number_of_homes, ))
 
+    create_connections_thread = threading.Thread(target=create_connections)
+    create_connections_thread.start()
+
+
+    startup_time = time.time()
+
     print("starting weather")
     weather_process.start()
-    time.sleep(1)
     print("starting market")
     market_process.start()
-    time.sleep(1)
     print("starting homes")
     homes_process.start()
 
     input("Type anything to stop.")
-
     os.kill(weather_process.pid, signal.SIGALRM)
     os.kill(market_process.pid, signal.SIGALRM)
     os.kill(homes_process.pid, signal.SIGALRM)
 
+    stop_event.set()
+    mq = sysv_ipc.MessageQueue(constants.MESSAGE_QUEUE_KEY)
+    mq.remove()
 
     print('i reached the end of main')
 
-with open('homes_data.json', 'w') as json_file:
-    json.dump(homes_data, json_file,
-              indent=4,
-              separators=(',', ': '))
+    try:
+        os.mkdir("output")
+    except FileExistsError:
+        pass
+
+    with open('output/homes_data.json', 'w') as json_file:
+        json.dump(homes_data, json_file,
+                indent=4,
+                separators=(',', ': '))
+
+    with open('output/market_data.json', 'w') as json_file:
+        json.dump(market_data, json_file,
+                indent=4,
+                separators=(',', ': '))
+
+    with open('output/weather_data.json', 'w') as json_file:
+        json.dump(weather_data, json_file,
+                indent=4,
+                separators=(',', ': '))
