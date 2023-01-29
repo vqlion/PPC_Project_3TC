@@ -2,7 +2,6 @@ from src import price
 
 def transaction_handler(socket, address):
     with socket as client_socket:
-        print("client:", address)
         message_received = ['']
         current_price = str(price.price)
 
@@ -39,16 +38,12 @@ def transaction_handler(socket, address):
                     break
             elif message_received[0] == 'end':
                 res = 'end'
-                print(address, message_received, '>', res)
                 client_socket.sendall(res.encode())
                 break
             else:
                 res = 'invalid'
-                print(address, message_received, '>', res)
                 client_socket.sendall(res.encode())
                 break
 
-            print(address, message_received, '>', res)
-        print("disconnect from client:", address)
 
     pass

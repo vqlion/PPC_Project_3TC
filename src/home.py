@@ -14,7 +14,6 @@ stop_event = threading.Event()
 def handler_alrm(sig, frame):
     global stop_event
     if sig == signal.SIGALRM:
-        print("home received signal to terminate")
         stop_event.set()
 
 
@@ -27,10 +26,12 @@ class bcolors:
     OKCYAN = '\033[96m'
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'
+    RED = "\033[1;31m"
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    RESET = "\033[0;0m"
  
 
 class Home(Process):
@@ -100,15 +101,18 @@ class Home(Process):
                 else:
                     if self.strategy == 1:
                         self.queue.send(str(energy_produced).encode(), type=1)
-                        print(bcolors.OKBLUE + f"Home {self.id} gave {energy_produced} to the queue")
+                        print(bcolors.OKBLUE + f"Home {self.id} gave {energy_produced} to the community." + bcolors.RESET)
                     elif self.strategy == 2:
                         self.transaction_handler('sell', energy_produced)
+                        print(bcolors.OKBLUE + f"Home {self.id} sold {energy_produced} to the market." + bcolors.RESET)
                     else:
                         try:
                             self.queue.receive(block=False, type=2)
                             self.queue.send(str(energy_produced).encode(), type=1)
+                            print(bcolors.OKBLUE + f"Home {self.id} gave {energy_produced} to the community." + bcolors.RESET)
                         except:
                             self.transaction_handler('sell', energy_produced)
+                            print(bcolors.OKBLUE + f"Home {self.id} sold {energy_produced} to the market." + bcolors.RESET)
 
     def consume_energy(self):
         global stop_event
@@ -130,7 +134,7 @@ class Home(Process):
         while not stop_event.is_set():
             if self.idle:
                 self.send_update()
-                print(bcolors.FAIL + f"Home {self.id} is out of energy. It goes idle with a balance of {self.balance}")
+                print(bcolors.RED + f"Home {self.id} out of energy. It goes idle." + bcolors.RESET)
                 if self.transaction_handler('buy', 3):
                     energy_taken = ""
                     try:
@@ -141,11 +145,11 @@ class Home(Process):
                     energy_taken = float(energy_taken.decode())
                     with self.energy_mutex:
                         self.energy += energy_taken
-                    print(bcolors.OKCYAN + f"Home {self.id} got out of idle: took {energy_taken} from the queue. Current amount of energy: {self.energy}")
+                    print(bcolors.OKGREEN + f"Home {self.id} out of idle: took {energy_taken} from the community." + bcolors.RESET)
                 else:
                     with self.energy_mutex:
                         self.energy += 3
-                    print(bcolors.OKGREEN + f"Home {self.id} got out of idle: bought 3 from the market. . Current amount of energy: {self.energy}. New balance is {self.balance}")
+                    print(bcolors.OKGREEN + f"Home {self.id} got out of idle: bought 3 from the market." + bcolors.RESET)
                 self.idle = False
 
     def update_logs(self):
@@ -162,8 +166,8 @@ class Home(Process):
 
 
     def run(self):
+        print(f"Home {self.id + 1} is starting...")
         global stop_event
-        print(os.getpid(), self.id)
         weather_updates = self.get_weather()
         signal.signal(signal.SIGALRM, handler_alrm)
 
@@ -184,3 +188,4 @@ class Home(Process):
         producer_thread.join()
         handler_thread.join()
         update_thread.join()
+        print(f"Home {self.id + 1} is terminating...")

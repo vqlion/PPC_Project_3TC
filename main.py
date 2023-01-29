@@ -30,7 +30,6 @@ homes_mutex = threading.Lock()
 stop_event = threading.Event()
 
 startup_time = 0
-event = False
 
 def create_connections():
     global stop_event
@@ -50,12 +49,10 @@ def create_connections():
 
 
 def transaction_handler(socket, address):
-    global homes_data, market_data, weather_data, startup_time, event, idles
+    global homes_data, market_data, weather_data, startup_time
     with socket as client_socket:
         data = client_socket.recv(1024)
         message = data.decode().split()
-
-        print(address, message)
 
         source = message[0]
         id = int(message[1])
@@ -66,7 +63,6 @@ def transaction_handler(socket, address):
 
         if source == "market":
             market_data.append({"time": time_since_beginning, "price": info1, "event": info2})
-            event = int(info2)
         elif source == "weather":
             weather_data.append({"time": time_since_beginning, "temp": info1})
         elif source == "home":
@@ -74,12 +70,11 @@ def transaction_handler(socket, address):
                 homes_data[id]["log"].append({"time": time_since_beginning, "balance": info1, "energy": info2})
 
 fig, ax = plt.subplots(2, 2)
-plt.suptitle("Visual representation of the simulation. Close the window to end.", fontsize="medium")
+plt.suptitle("Visual representation of the simulation. Close the window to end.", fontsize="large")
 width = 0.35
 
 
 def plotter(i):
-    global event
     for row in ax:
         for col in row:
             col.clear()
@@ -103,7 +98,7 @@ def plotter(i):
 
         balances.append(current_balance)
         energies.append(current_energy)
-        labels.append(f'Home {i+1} {"(idle)" if idles[i] else ""}')
+        labels.append(f'Home {i+1}')
         i += 1
 
     balance_bar = ax[0, 1].bar(x - width / 2, balances, width, label='Balance (euros)', color='b')
@@ -117,31 +112,43 @@ def plotter(i):
     patches[1][0] = mpatches.Patch(color='green', label='Event', linestyle='-', linewidth=1)
     patches[1][1] = mpatches.Patch(color='red', label='Temperature', linestyle='-', linewidth=1)
 
+    ticks_event = []
+    ticks_event.append("No event")
+    ticks_event.append("Event occuring")
+    ticks_event.append("Large event occuring")
+    y = [0, 1, 2]
+
     ax[0, 0].set(xlabel='Time elapsed (s)', ylabel='Price (euros/kWh)')
     ax[0, 0].legend(handles=[patches[0][0]])
     ax[0, 1].legend()
     ax[0, 1].set_xticks(x, labels)
     ax[1, 0].set(xlabel='Time elapsed (s)', ylabel='Event occuring')
+    ax[1, 0].set_yticks(y, ticks_event)
     ax[1, 0].legend(handles=[patches[1][0]])
     ax[1, 1].set(xlabel='Time elapsed (s)', ylabel='Temperature (°C)')
     ax[1, 1].legend(handles=[patches[1][1]])
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:  # Check number of arguments is correct
-        print("Provide one argument: the number of homes")
+    if len(sys.argv) != 3:  # Check number of arguments is correct
+        print("Usage: python3 main.py {number of homes} {mode}")
+        print("The mode can be 0, 1, 2 or 3. See documentation for the description of each mode.")
         sys.exit(0)
 
     try:  # handling type errors (user doesn't input a number)
         int(sys.argv[1])
+        int(sys.argv[2])
     except Exception as e:
-        print("Provide an integer as the parameter for the number of homes")
+        print("Usage: python3 main.py {number of homes} {mode}")
+        print("The mode can be 0, 1, 2 or 3. See documentation for the description of each mode.")
         sys.exit(0)
 
     number_of_homes = int(sys.argv[1])
+    homes_type = int(sys.argv[2])
 
-    if (number_of_homes < 0):
-        print('Provide a positive integer!')
+    if (number_of_homes < 0 or homes_type < 0 or homes_type > 3):
+        print("Usage: python3 main.py {number of homes} {mode}")
+        print("The mode can be 0, 1, 2 or 3. See documentation for the description of each mode.")
         sys.exit(0)
 
     for i in range(number_of_homes):
@@ -149,34 +156,31 @@ if __name__ == "__main__":
 
     weather_process = Process(target=weather.create_weather)
     market_process = Process(target=market.market)
-    homes_process = Process(target=home_creator.create_homes, args=(number_of_homes, ))
+    homes_process = Process(target=home_creator.create_homes, args=(number_of_homes, homes_type, ))
 
     create_connections_thread = threading.Thread(target=create_connections)
     create_connections_thread.start()
 
-
     startup_time = time.time()
 
-    print("starting weather")
+    print("Starting the weather process...")
     weather_process.start()
-    print("starting market")
+    print("Starting the market process...")
     market_process.start()
-    print("starting homes")
+    print("Creating the homes...")
     homes_process.start()
 
     time.sleep(2)
 
+    print("Starting the real time plot...")
     ani = animation.FuncAnimation(fig, plotter, interval=250)
     plt.show()
 
-    input("Type anything to stop.")
-    os.kill(weather_process.pid, signal.SIGALRM)
-    os.kill(market_process.pid, signal.SIGALRM)
     os.kill(homes_process.pid, signal.SIGALRM)
+    os.kill(market_process.pid, signal.SIGALRM)
+    os.kill(weather_process.pid, signal.SIGALRM)
 
     stop_event.set()
-
-    print('i reached the end of main')
 
     try:
         os.mkdir("output")

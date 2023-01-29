@@ -14,20 +14,20 @@ import os
 
 MAX_THREADS = 10
 
-external = False
-big_event = False
+external_event = False
+big_external_event = False
 stop_event = threading.Event()
 
 def signal_handler(sig, frame):
-    global external
-    global big_event
+    global external_event
+    global big_external_event
     if sig == signal.SIGUSR1:
-        external = not external
-        big_event = False
-        print("An external event has occured") if external else print("An external event is over")
+        if big_external_event:
+            big_external_event = False
+        else:
+            external_event = not external_event
     elif sig == signal.SIGUSR2:
-        big_event = True
-        print("A big event has occured!")
+        big_external_event = True
 
 signal.signal(signal.SIGUSR1, signal_handler)
 signal.signal(signal.SIGUSR2, signal_handler)
@@ -35,21 +35,19 @@ signal.signal(signal.SIGUSR2, signal_handler)
 def handler_alrm(sig, frame):
     global stop_event
     if sig == signal.SIGALRM:
-        print('market received signal to terminate')
         stop_event.set()
 
 def create_external_events():
     global stop_event
     while not stop_event.is_set():
-        timeout = random.randint(1,60)
-        time.sleep(timeout)
+        time.sleep(1)
         decider = random.random()
-        if decider > 0.1:
-            os.kill(os.getppid(), signal.SIGUSR1)
-        else:
-            os.kill(os.getppid(), signal.SIGUSR2)
-
-
+        if decider < 0.1:
+            if decider > 0.01:
+                os.kill(os.getppid(), signal.SIGUSR1)
+            else:
+                os.kill(os.getppid(), signal.SIGUSR2)
+        
 class DictManager(SyncManager): pass
 
 def create_connections():
@@ -76,34 +74,27 @@ def get_weather():
     
     return weather_updates
 
-def printer():
-    global stop_event
-    while not stop_event.is_set():
-        time.sleep(10)
-        print("The price is", price.price, "- External event is impacting the price") if external else print("The price is", price.price)
-        print("price event", stop_event.is_set())
-
 def update_logs():
-    global stop_event
+    global stop_event, external_event, big_external_event
     while not stop_event.is_set():
         time.sleep(1)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((HOST, MAIN_PORT))
-            message = f"market 0 {price.price} {0 if external or big_event else 1}"
+            event_value = 0
+            if external_event: event_value = 1
+            if big_external_event: event_value = 2
+            message = f"market 0 {price.price} {event_value}"
             client_socket.sendall(message.encode())
 
 def market():
-    print("market is", os.getpid())
     price.setPrice(STD_PRICE)
     global stop_event
-    ex_event_process = Process(target=create_external_events)
+    ex_event_process = Process(target=create_external_events, daemon=True)
     ex_event_process.start()
 
     create_connections_thread = threading.Thread(target=create_connections)
     
     create_connections_thread.start()
-    printer_thread = threading.Thread(target=printer)
-    printer_thread.start()
 
     update_thread = threading.Thread(target=update_logs)
     update_thread.start()
@@ -115,11 +106,10 @@ def market():
         time.sleep(1)
         temperature = weather_updates.get("temp")
         current_cons = STD_ENERGY + (1 / temperature)
-        new_price = (0.99 * previous_price) + (0.001 * (1 / temperature)) + (0.01 * external) + big_event + (0.0001 * current_cons)
+        new_price = (0.99 * previous_price) + (0.001 * (1 / temperature)) + (0.01 * external_event) + big_external_event + (0.0001 * current_cons)
         price.setPrice(new_price)
         previous_price = new_price
 
     create_connections_thread.join()
-    printer_thread.join()
     update_thread.join()
-    ex_event_process.kill()
+    print('The market process is terminating...')
