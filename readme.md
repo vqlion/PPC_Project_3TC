@@ -21,11 +21,15 @@ The program displays graphs representing the evolution of the simulation (the pr
 
 First install the required packages:
 
-```pip install -r requirements.txt```
+```shell
+pip install -r requirements.txt
+```
 
 Then run the program:
 
-```python3 main.py {number of homes} {mode}```
+```shell
+python3 main.py {number of homes} {mode}
+```
 
 The number of homes you want in the simulation is {number of homes}
 
