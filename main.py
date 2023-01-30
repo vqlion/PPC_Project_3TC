@@ -20,6 +20,7 @@ from src import market
 from src import weather
 from src import constants
 
+# maximum number of threads to handle socket connections with the other processes
 MAX_THREADS = 5
 
 homes_data = []
@@ -31,7 +32,9 @@ stop_event = threading.Event()
 
 startup_time = 0
 
+
 def create_connections():
+    #separate thread that creates a thread pool to handle socket connections
     global stop_event
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((constants.HOST, constants.MAIN_PORT))
@@ -49,6 +52,7 @@ def create_connections():
 
 
 def transaction_handler(socket, address):
+    #handles every connection with the other processes
     global homes_data, market_data, weather_data, startup_time
     with socket as client_socket:
         data = client_socket.recv(1024)
@@ -62,26 +66,35 @@ def transaction_handler(socket, address):
         time_since_beginning = current_time - startup_time
 
         if source == "market":
-            market_data.append({"time": time_since_beginning, "price": info1, "event": info2})
+            market_data.append(
+                {"time": time_since_beginning, "price": info1, "event": info2})
         elif source == "weather":
             weather_data.append({"time": time_since_beginning, "temp": info1})
         elif source == "home":
-            with homes_mutex:
-                homes_data[id]["log"].append({"time": time_since_beginning, "balance": info1, "energy": info2})
+            with homes_mutex: #protecting the homes data because multiple homes can send updates at the same time
+                homes_data[id]["log"].append(
+                    {"time": time_since_beginning, "balance": info1, "energy": info2})
+
 
 fig, ax = plt.subplots(2, 2, num="Summary")
-plt.suptitle("Visual representation of the simulation. Close the window to end.", fontsize="large")
+plt.suptitle(
+    "Close the window to end.", fontsize="large")
 width = 0.35
 
 
 def plotter(i):
+    #handles the real-time plotting. called periodically by ani
+    #a lot of complicated and not necessarily intersting lines of code to have somewhat beautiful graphs
     for row in ax:
         for col in row:
             col.clear()
 
-    ax[0, 0].plot([d["time"] for d in market_data], [d["price"] for d in market_data], 'b')
-    ax[1, 1].plot([d["time"] for d in weather_data], [d["temp"] for d in weather_data], 'r')
-    ax[1, 0].plot([d["time"] for d in market_data], [d["event"] for d in market_data], 'g')
+    ax[0, 0].plot([d["time"] for d in market_data], [d["price"]
+                  for d in market_data], 'b')
+    ax[1, 1].plot([d["time"] for d in weather_data], [d["temp"]
+                  for d in weather_data], 'r')
+    ax[1, 0].plot([d["time"] for d in market_data], [d["event"]
+                  for d in market_data], 'g')
 
     x = np.arange(len(homes_data))
     balances = []
@@ -101,18 +114,21 @@ def plotter(i):
         labels.append(f'Home {i+1}')
         i += 1
 
-    balance_bar = ax[0, 1].bar(x - width / 2, balances, width, label='Balance (euros)', color='b')
-    energy_bar = ax[0, 1].bar(x + width / 2, energies, width, label='Energy (kWh)', color='r')
+    balance_bar = ax[0, 1].bar(
+        x - width / 2, balances, width, label='Balance (euros)', color='b')
+    energy_bar = ax[0, 1].bar(x + width / 2, energies,
+                              width, label='Energy (kWh)', color='r')
     ax[0, 1].bar_label(balance_bar, padding=3)
     ax[0, 1].bar_label(energy_bar, padding=3)
 
     patches = [[None for _ in range(2)] for _ in range(2)]
 
     patches[0][0] = mpatches.Patch(color='blue', label='Price', linestyle='-')
-    patches[1][0] = mpatches.Patch(color='green', label='Event', linestyle='-', linewidth=1)
-    patches[1][1] = mpatches.Patch(color='red', label='Temperature', linestyle='-', linewidth=1)
+    patches[1][0] = mpatches.Patch(
+        color='green', label='Event', linestyle='-', linewidth=1)
+    patches[1][1] = mpatches.Patch(
+        color='red', label='Temperature', linestyle='-', linewidth=1)
 
-    
     ticks_event = ["No event", "Event occuring", "Large event occuring"]
     y = [0, 1, 2]
 
@@ -133,7 +149,7 @@ if __name__ == "__main__":
         print("The mode can be 0, 1, 2 or 3. See documentation for the description of each mode.")
         sys.exit(0)
 
-    try:  # handling type errors (user doesn't input a number)
+    try:  # handling type errors
         int(sys.argv[1])
         int(sys.argv[2])
     except Exception as e:
@@ -154,13 +170,15 @@ if __name__ == "__main__":
 
     weather_process = Process(target=weather.create_weather)
     market_process = Process(target=market.market)
-    homes_process = Process(target=home_creator.create_homes, args=(number_of_homes, homes_type, ))
+    homes_process = Process(target=home_creator.create_homes,
+                            args=(number_of_homes, homes_type, ))
 
     create_connections_thread = threading.Thread(target=create_connections)
     create_connections_thread.start()
 
     startup_time = time.time()
 
+    #starting all the simulation's processes in the right order
     print("Starting the weather process...")
     weather_process.start()
     print("Starting the market process...")
@@ -168,12 +186,14 @@ if __name__ == "__main__":
     print("Creating the homes...")
     homes_process.start()
 
-    time.sleep(2)
+    time.sleep(1.5) #wait for a bit to reach a stable state
 
     print("Starting the real time plot...")
     ani = animation.FuncAnimation(fig, plotter, interval=250)
-    plt.show()
+    plt.show() 
+    #the script blocks here until the plot window is closed
 
+    #sending signals to terminate the processes
     os.kill(homes_process.pid, signal.SIGALRM)
     os.kill(market_process.pid, signal.SIGALRM)
     os.kill(weather_process.pid, signal.SIGALRM)
@@ -181,6 +201,7 @@ if __name__ == "__main__":
     stop_event.set()
     create_connections_thread.join()
 
+    #dumps the dictionnaries with all data about the processes in json files
     try:
         os.mkdir("output")
     except FileExistsError:
@@ -188,15 +209,15 @@ if __name__ == "__main__":
 
     with open('output/homes_data.json', 'w') as json_file:
         json.dump(homes_data, json_file,
-                indent=4,
-                separators=(',', ': '))
+                  indent=4,
+                  separators=(',', ': '))
 
     with open('output/market_data.json', 'w') as json_file:
         json.dump(market_data, json_file,
-                indent=4,
-                separators=(',', ': '))
+                  indent=4,
+                  separators=(',', ': '))
 
     with open('output/weather_data.json', 'w') as json_file:
         json.dump(weather_data, json_file,
-                indent=4,
-                separators=(',', ': '))
+                  indent=4,
+                  separators=(',', ': '))

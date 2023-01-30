@@ -1,14 +1,16 @@
-from src import price
+from src import market
 
 def transaction_handler(socket, address):
+    #handles the market connections with the homes
     with socket as client_socket:
         message_received = ['']
-        current_price = str(price.price)
+        current_price = str(market.price)
 
         while message_received[0] != 'end':
             data = client_socket.recv(1024)
             message_received = data.decode().split()
             res = ''
+
             if message_received[0] == 'price?':
                 res = 'price '
                 res += current_price
@@ -19,9 +21,10 @@ def transaction_handler(socket, address):
                 quantity_asked = 0
                 try:
                     quantity_asked = float(message_received[1])
-                    transaction_price = price.price * quantity_asked
+                    transaction_price = market.price * quantity_asked
                     res = 'ok_buy '
                     res += str(transaction_price)
+                    
                     client_socket.sendall(res.encode())
                 except Exception:
                     break
@@ -30,7 +33,7 @@ def transaction_handler(socket, address):
                 quantity_sold = 0
                 try:
                     quantity_sold = float(message_received[1])
-                    transaction_price = price.price * quantity_sold
+                    transaction_price = market.price * quantity_sold
                     res = 'ok_sell '
                     res += str(transaction_price)
                     client_socket.sendall(res.encode())
@@ -44,6 +47,3 @@ def transaction_handler(socket, address):
                 res = 'invalid'
                 client_socket.sendall(res.encode())
                 break
-
-
-    pass

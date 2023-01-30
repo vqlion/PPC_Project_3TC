@@ -3,6 +3,9 @@ import matplotlib.patches as mpatches
 
 import json
 
+#again a lot of complicated lines to have beautiful graphs
+#not very interesting, and the docs describe it better than me (https://matplotlib.org/3.6.3/api/index.html)
+
 homes_data = json.load(open("output/homes_data.json"))
 market_data = json.load(open("output/market_data.json"))
 weather_data = json.load(open("output/weather_data.json"))
