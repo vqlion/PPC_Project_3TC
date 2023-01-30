@@ -69,7 +69,7 @@ def transaction_handler(socket, address):
             with homes_mutex:
                 homes_data[id]["log"].append({"time": time_since_beginning, "balance": info1, "energy": info2})
 
-fig, ax = plt.subplots(2, 2)
+fig, ax = plt.subplots(2, 2, num="Summary")
 plt.suptitle("Visual representation of the simulation. Close the window to end.", fontsize="large")
 width = 0.35
 
@@ -112,10 +112,8 @@ def plotter(i):
     patches[1][0] = mpatches.Patch(color='green', label='Event', linestyle='-', linewidth=1)
     patches[1][1] = mpatches.Patch(color='red', label='Temperature', linestyle='-', linewidth=1)
 
-    ticks_event = []
-    ticks_event.append("No event")
-    ticks_event.append("Event occuring")
-    ticks_event.append("Large event occuring")
+    
+    ticks_event = ["No event", "Event occuring", "Large event occuring"]
     y = [0, 1, 2]
 
     ax[0, 0].set(xlabel='Time elapsed (s)', ylabel='Price (euros/kWh)')
@@ -181,6 +179,7 @@ if __name__ == "__main__":
     os.kill(weather_process.pid, signal.SIGALRM)
 
     stop_event.set()
+    create_connections_thread.join()
 
     try:
         os.mkdir("output")

@@ -30,7 +30,6 @@ Then run the program:
 ```shell
 python3 main.py {number of homes} {mode}
 ```
-
 The number of homes you want in the simulation is {number of homes}
 
 The parameter {mode} can be one of the following:
@@ -38,6 +37,13 @@ The parameter {mode} can be one of the following:
  - 1: all homes will follow the "always give" strategy 
  - 2: all homes will follow the "always sell" strategy 
  - 3: all homes will follow the "sell if no askers" strategy 
+
+You can then visualize the simulation after it's over by running:
+
+```shell
+python3 plot.py
+```
+
 
 ## Team
 
