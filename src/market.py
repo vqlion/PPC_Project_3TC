@@ -142,11 +142,12 @@ def market():
         time.sleep(1)  # updates the price every second to avoid convergence
         try:
             temperature = weather_updates.get("temp")
+            rain = weather_updates.get("rain")
         except:
             pass
         current_cons = STD_ENERGY + (1 / temperature)
         new_price = (0.99 * previous_price) + (0.001 * (1 / temperature)) + \
-            (0.01 * external_event) + (0.1 * big_external_event) + (0.0001 * current_cons)
+            (0.01 * external_event) + (0.1 * big_external_event) + (0.0001 * current_cons) + (0.01 * rain)
         setPrice(new_price)
         previous_price = new_price
 

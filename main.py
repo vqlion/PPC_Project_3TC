@@ -69,7 +69,7 @@ def transaction_handler(socket, address):
             market_data.append(
                 {"time": time_since_beginning, "price": info1, "event": info2})
         elif source == "weather":
-            weather_data.append({"time": time_since_beginning, "temp": info1})
+            weather_data.append({"time": time_since_beginning, "temp": info1, "rain": info2})
         elif source == "home":
             with homes_mutex: #protecting the homes data because multiple homes can send updates at the same time
                 homes_data[id]["log"].append(
@@ -93,8 +93,10 @@ def plotter(i):
                   for d in market_data], 'b')
     ax[1, 1].plot([d["time"] for d in weather_data], [d["temp"]
                   for d in weather_data], 'r')
+    ax[1, 0].plot([d["time"] for d in market_data], [d["rain"]
+                  for d in weather_data], 'b--')
     ax[1, 0].plot([d["time"] for d in market_data], [d["event"]
-                  for d in market_data], 'g')
+                  for d in market_data], 'r')
 
     x = np.arange(len(homes_data))
     balances = []
@@ -124,8 +126,9 @@ def plotter(i):
     patches = [[None for _ in range(2)] for _ in range(2)]
 
     patches[0][0] = mpatches.Patch(color='blue', label='Price', linestyle='-')
-    patches[1][0] = mpatches.Patch(
-        color='green', label='Event', linestyle='-', linewidth=1)
+    event_patch = [mpatches.Patch(
+        color='red', label='Event', linestyle='-', linewidth=0.1), mpatches.Patch(
+        color='blue', label='Rain', linestyle='-', linewidth=0.1) ]
     patches[1][1] = mpatches.Patch(
         color='red', label='Temperature', linestyle='-', linewidth=1)
 
@@ -136,9 +139,9 @@ def plotter(i):
     ax[0, 0].legend(handles=[patches[0][0]])
     ax[0, 1].legend()
     ax[0, 1].set_xticks(x, labels)
-    ax[1, 0].set(xlabel='Time elapsed (s)', ylabel='Event occuring')
+    ax[1, 0].set(xlabel='Time elapsed (s)')
     ax[1, 0].set_yticks(y, ticks_event)
-    ax[1, 0].legend(handles=[patches[1][0]])
+    ax[1, 0].legend(handles=event_patch)
     ax[1, 1].set(xlabel='Time elapsed (s)', ylabel='Temperature (°C)')
     ax[1, 1].legend(handles=[patches[1][1]])
 
