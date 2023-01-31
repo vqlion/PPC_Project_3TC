@@ -34,7 +34,7 @@ startup_time = 0
 
 
 def create_connections():
-    #separate thread that creates a thread pool to handle socket connections
+    # separate thread that creates a thread pool to handle socket connections
     global stop_event
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((constants.HOST, constants.MAIN_PORT))
@@ -52,7 +52,7 @@ def create_connections():
 
 
 def transaction_handler(socket, address):
-    #handles every connection with the other processes
+    # handles every connection with the other processes
     global homes_data, market_data, weather_data, startup_time
     with socket as client_socket:
         data = client_socket.recv(1024)
@@ -69,9 +69,10 @@ def transaction_handler(socket, address):
             market_data.append(
                 {"time": time_since_beginning, "price": info1, "event": info2})
         elif source == "weather":
-            weather_data.append({"time": time_since_beginning, "temp": info1, "rain": info2})
+            weather_data.append(
+                {"time": time_since_beginning, "temp": info1, "rain": info2})
         elif source == "home":
-            with homes_mutex: #protecting the homes data because multiple homes can send updates at the same time
+            with homes_mutex:  # protecting the homes data because multiple homes can send updates at the same time
                 homes_data[id]["log"].append(
                     {"time": time_since_beginning, "balance": info1, "energy": info2})
 
@@ -83,20 +84,16 @@ width = 0.35
 
 
 def plotter(i):
-    #handles the real-time plotting. called periodically by ani
-    #a lot of complicated and not necessarily intersting lines of code to have somewhat beautiful graphs
+    # handles the real-time plotting. called periodically by ani
+    # a lot of complicated and not necessarily intersting lines of code to have somewhat beautiful graphs
     for row in ax:
         for col in row:
             col.clear()
 
-    ax[0, 0].plot([d["time"] for d in market_data], [d["price"]
-                  for d in market_data], 'b')
-    ax[1, 1].plot([d["time"] for d in weather_data], [d["temp"]
-                  for d in weather_data], 'r')
-    ax[1, 0].plot([d["time"] for d in market_data], [d["rain"]
-                  for d in weather_data], 'b--')
-    ax[1, 0].plot([d["time"] for d in market_data], [d["event"]
-                  for d in market_data], 'r')
+    ax[0, 0].plot([d["time"] for d in market_data], [d["price"]for d in market_data], 'b')
+    ax[1, 1].plot([d["time"] for d in weather_data], [d["temp"]for d in weather_data], 'r')
+    ax[1, 0].plot([d["time"] for d in weather_data], [d["rain"]for d in weather_data], 'b--')
+    ax[1, 0].plot([d["time"] for d in market_data], [d["event"]for d in market_data], 'r')
 
     x = np.arange(len(homes_data))
     balances = []
@@ -128,7 +125,7 @@ def plotter(i):
     patches[0][0] = mpatches.Patch(color='blue', label='Price', linestyle='-')
     event_patch = [mpatches.Patch(
         color='red', label='Event', linestyle='-', linewidth=0.1), mpatches.Patch(
-        color='blue', label='Rain', linestyle='-', linewidth=0.1) ]
+        color='blue', label='Rain', linestyle='-', linewidth=0.1)]
     patches[1][1] = mpatches.Patch(
         color='red', label='Temperature', linestyle='-', linewidth=1)
 
@@ -181,7 +178,7 @@ if __name__ == "__main__":
 
     startup_time = time.time()
 
-    #starting all the simulation's processes in the right order
+    # starting all the simulation's processes in the right order
     print("Starting the weather process...")
     weather_process.start()
     print("Starting the market process...")
@@ -189,22 +186,28 @@ if __name__ == "__main__":
     print("Creating the homes...")
     homes_process.start()
 
-    time.sleep(1.5) #wait for a bit to reach a stable state
+    time.sleep(1.5)  # wait for a bit to reach a stable state
 
     print("Starting the real time plot...")
-    ani = animation.FuncAnimation(fig, plotter, interval=250)
-    plt.show() 
-    #the script blocks here until the plot window is closed
+    ani = animation.FuncAnimation(fig, plotter, interval=250) # calls plotter repeatedly
+    plt.show()
+    # the script blocks here until the plot window is closed
 
-    #sending signals to terminate the processes
+    # sending signals to terminate the processes
+    mq = sysv_ipc.MessageQueue(constants.MESSAGE_QUEUE_KEY)
+
     os.kill(homes_process.pid, signal.SIGALRM)
+    for _ in range(number_of_homes):
+        mq.send("0".encode(), type=1) 
+    # send messages to the message queue to unblock the homes that were waiting
+
     os.kill(market_process.pid, signal.SIGALRM)
     os.kill(weather_process.pid, signal.SIGALRM)
 
     stop_event.set()
     create_connections_thread.join()
 
-    #dumps the dictionnaries with all data about the processes in json files
+    # dumps the dictionnaries with all data about the processes in json files
     try:
         os.mkdir("output")
     except FileExistsError:

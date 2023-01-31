@@ -84,6 +84,9 @@ class Home(Process):
 
                     client_socket.sendall('end'.encode())
                     return 0 #return 0 when the operation went through
+                else:
+                    client_socket.sendall('end'.encode())
+                    return 1 #return 1 when the operation didn't go through
 
     def get_weather(self):
         #returns the weather dictionary (shared memory)
@@ -160,14 +163,14 @@ class Home(Process):
                     try:
                         energy_taken, t = self.queue.receive(block=False, type=1) #try to get energy from the queue
                     except:
-                        self.queue.send(1, type=2) #if it didn't work, ask the queue
-                        energy_taken, t = self.queue.receive(type=1)
+                        self.queue.send("1".encode(), type=2) #if it didn't work, ask the queue
+                        energy_taken, t = self.queue.receive(block=True, type=1)
                     energy_taken = float(energy_taken.decode())
 
                     with self.energy_mutex:
                         self.energy += energy_taken
 
-                    print(bcolors.OKGREEN + f"Home {self.id} out of idle: took {energy_taken} from the community." + bcolors.RESET)
+                    if energy_taken != 0: print(bcolors.OKGREEN + f"Home {self.id} out of idle: took {energy_taken} from the community." + bcolors.RESET)
                 else:
                     with self.energy_mutex:
                         self.energy += 3
